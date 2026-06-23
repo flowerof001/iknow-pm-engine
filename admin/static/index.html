@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>iKnow — AI 产品经理内容引擎</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          brand: { 50:'#f0f7ff',100:'#e0effe',200:'#b9dffc',300:'#7cc5fa',400:'#36a9f5',500:'#0c8ee6',600:'#0070c4',700:'#01599f',800:'#064c83',900:'#0b406d' }
+        }
+      }
+    }
+  }
+</script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap');
+  * { font-family: 'Inter', 'Noto Sans SC', system-ui, sans-serif; }
+  .tab-active { border-bottom: 2px solid #0c8ee6; color: #0c8ee6; }
+  .tab-inactive { color: #6b7280; }
+  .tab-inactive:hover { color: #374151; }
+  .card { background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border: 1px solid #e5e7eb; }
+  .btn-primary { background: #0c8ee6; color: white; padding: 8px 20px; border-radius: 8px; font-weight: 500; cursor: pointer; border: none; }
+  .btn-primary:hover { background: #0070c4; }
+  .btn-primary:disabled { background: #93c5fd; cursor: not-allowed; }
+  .btn-secondary { background: white; color: #374151; padding: 8px 20px; border-radius: 8px; font-weight: 500; cursor: pointer; border: 1px solid #d1d5db; }
+  .btn-secondary:hover { background: #f9fafb; }
+  .badge-ok { background: #d1fae5; color: #065f46; padding: 2px 8px; border-radius: 9999px; font-size: 12px; }
+  .badge-err { background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 9999px; font-size: 12px; }
+  .badge-empty { background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 9999px; font-size: 12px; }
+  .log-line { padding: 2px 0; font-size: 13px; color: #374151; border-bottom: 1px solid #f3f4f6; }
+  .prose { max-width: none; }
+  .prose h2 { font-size: 1.25rem; font-weight: 700; margin-top: 1.5rem; color: #111827; }
+  .prose h3 { font-size: 1.1rem; font-weight: 600; margin-top: 1rem; color: #1f2937; }
+  .prose p { margin: 0.5rem 0; line-height: 1.75; color: #374151; }
+  .prose table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+  .prose th { background: #f9fafb; padding: 8px 12px; text-align: left; font-weight: 600; border: 1px solid #e5e7eb; }
+  .prose td { padding: 8px 12px; border: 1px solid #e5e7eb; }
+  .prose code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+  .prose pre { background: #1f2937; color: #e5e7eb; padding: 16px; border-radius: 8px; overflow-x: auto; }
+  .prose pre code { background: none; color: inherit; }
+  #log-container::-webkit-scrollbar { width: 4px; }
+  #log-container::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
+  .animate-pulse-slow { animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+  .slide-in { animation: slideIn 0.3s ease-out; }
+  @keyframes slideIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+  .modal { background: white; border-radius: 16px; max-width: 900px; width: 95%; max-height: 85vh; overflow-y: auto; padding: 32px; }
+  .platform-tab { padding: 6px 16px; border-radius: 6px 6px 0 0; font-size: 13px; cursor: pointer; border: none; background: #f3f4f6; color: #6b7280; }
+  .platform-tab.active { background: white; color: #0c8ee6; font-weight: 600; }
+  textarea.content-editor { width: 100%; min-height: 400px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 14px; line-height: 1.7; padding: 16px; border: 1px solid #d1d5db; border-radius: 8px; }
+</style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+<!-- Top Nav -->
+<nav class="bg-white border-b border-gray-200 sticky top-0 z-50">
+  <div class="max-w-7xl mx-auto px-6 flex items-center justify-between h-14">
+    <div class="flex items-center gap-3">
+      <span class="text-2xl">🧠</span>
+      <span class="font-bold text-lg text-gray-900">iKnow</span>
+      <span class="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded">AI PM 内容引擎</span>
+    </div>
+    <div id="nav-status" class="flex items-center gap-3 text-sm text-gray-500">
+      <span id="status-dot" class="w-2 h-2 rounded-full bg-green-500 inline-block"></span>
+      <span id="status-text">就绪</span>
+    </div>
+  </div>
+</nav>
+
+<!-- Tabs -->
+<div class="bg-white border-b border-gray-200">
+  <div class="max-w-7xl mx-auto px-6 flex gap-8">
+    <button class="tab-active py-3 text-sm font-medium" data-tab="dashboard" onclick="switchTab('dashboard')">📊 仪表盘</button>
+    <button class="tab-inactive py-3 text-sm font-medium" data-tab="pipeline" onclick="switchTab('pipeline')">⚙️ 流水线</button>
+    <button class="tab-inactive py-3 text-sm font-medium" data-tab="content" onclick="switchTab('content')">📝 内容管理</button>
+    <button class="tab-inactive py-3 text-sm font-medium" data-tab="archive" onclick="switchTab('archive')">📦 归档</button>
+  </div>
+</div>
+
+<!-- Main Content -->
+<div id="app" class="max-w-7xl mx-auto px-6 py-6">
+  <!-- Dashboard -->
+  <div id="tab-dashboard" class="slide-in">
+    <div class="grid grid-cols-4 gap-4 mb-6">
+      <div class="card p-4"><div class="text-xs text-gray-500 mb-1">总运行次数</div><div id="stat-runs" class="text-2xl font-bold text-gray-900">-</div></div>
+      <div class="card p-4"><div class="text-xs text-gray-500 mb-1">生成内容数</div><div id="stat-contents" class="text-2xl font-bold text-gray-900">-</div></div>
+      <div class="card p-4"><div class="text-xs text-gray-500 mb-1">最新日期</div><div id="stat-date" class="text-2xl font-bold text-gray-900">-</div></div>
+      <div class="card p-4"><div class="text-xs text-gray-500 mb-1">最新状态</div><div id="stat-status" class="text-2xl font-bold">-</div></div>
+    </div>
+    <div class="grid grid-cols-2 gap-6">
+      <div class="card p-5">
+        <h3 class="font-semibold text-gray-900 mb-3">📡 数据源状态</h3>
+        <div id="source-list" class="space-y-2 text-sm"></div>
+        <button class="btn-secondary text-xs mt-3" onclick="refreshDashboard()">🔄 刷新</button>
+      </div>
+      <div class="card p-5">
+        <h3 class="font-semibold text-gray-900 mb-3">⚡ 快捷操作</h3>
+        <div class="space-y-3">
+          <button class="btn-primary w-full text-sm" onclick="switchTab('pipeline'); setTimeout(startPipeline,300)">🚀 一键运行流水线</button>
+          <div class="grid grid-cols-3 gap-2">
+            <div class="card p-3 text-center cursor-pointer hover:bg-gray-50" onclick="testSource('woshipm')">
+              <div class="text-lg mb-1">📰</div><div class="text-xs text-gray-600">人人PM</div>
+            </div>
+            <div class="card p-3 text-center cursor-pointer hover:bg-gray-50" onclick="testSource('juejin')">
+              <div class="text-lg mb-1">💎</div><div class="text-xs text-gray-600">掘金</div>
+            </div>
+            <div class="card p-3 text-center cursor-pointer hover:bg-gray-50" onclick="testSource('hackernews')">
+              <div class="text-lg mb-1">🔶</div><div class="text-xs text-gray-600">HN</div>
+            </div>
+            <div class="card p-3 text-center cursor-pointer hover:bg-gray-50" onclick="testSource('v2ex')">
+              <div class="text-lg mb-1">💬</div><div class="text-xs text-gray-600">V2EX</div>
+            </div>
+            <div class="card p-3 text-center cursor-pointer hover:bg-gray-50" onclick="testSource('github')">
+              <div class="text-lg mb-1">🐙</div><div class="text-xs text-gray-600">GitHub</div>
+            </div>
+            <div class="card p-3 text-center cursor-pointer hover:bg-gray-50" onclick="testSource('arxiv')">
+              <div class="text-lg mb-1">📄</div><div class="text-xs text-gray-600">arXiv</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card p-5 mt-6">
+      <h3 class="font-semibold text-gray-900 mb-3">📋 最新内容</h3>
+      <div id="latest-content" class="text-sm text-gray-500">加载中...</div>
+    </div>
+  </div>
+
+  <!-- Pipeline -->
+  <div id="tab-pipeline" class="slide-in hidden">
+    <div class="grid grid-cols-3 gap-6">
+      <div class="col-span-2 space-y-4">
+        <div class="card p-5">
+          <h3 class="font-semibold text-gray-900 mb-3">🚀 启动流水线</h3>
+          <div class="mb-3">
+            <div class="text-xs text-gray-500 mb-1">选择栏目（默认全选）</div>
+            <div class="flex flex-wrap gap-2" id="column-checks"></div>
+          </div>
+          <div class="flex items-center gap-4 mb-3">
+            <label class="flex items-center gap-2 text-sm"><input type="checkbox" id="opt-skip-scrape"> 跳过采集</label>
+            <label class="flex items-center gap-2 text-sm"><input type="checkbox" id="opt-images"> 生成配图</label>
+          </div>
+          <button class="btn-primary" id="btn-run" onclick="startPipeline()">▶ 开始运行</button>
+          <span id="run-status" class="text-sm text-gray-500 ml-3"></span>
+        </div>
+        <div class="card p-5">
+          <h3 class="font-semibold text-gray-900 mb-3">📜 运行日志</h3>
+          <div id="log-container" class="bg-gray-900 text-green-400 rounded-lg p-4 h-64 overflow-y-auto font-mono text-xs"></div>
+        </div>
+      </div>
+      <div class="card p-5">
+        <h3 class="font-semibold text-gray-900 mb-3">📜 历史运行</h3>
+        <div id="run-history" class="space-y-2 text-sm"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div id="tab-content" class="slide-in hidden">
+    <div class="flex items-center gap-3 mb-4">
+      <button class="btn-secondary text-sm" onclick="loadContents()">🔄 刷新</button>
+      <select id="filter-column" class="text-sm border rounded px-2 py-1" onchange="loadContents()">
+        <option value="">全部栏目</option>
+        <option value="ai_product_radar">岗位雷达</option>
+        <option value="ai_product_signal">产品信号</option>
+        <option value="pm_toolbox">提效工具箱</option>
+        <option value="ai_product_deepdive">深度拆解</option>
+        <option value="pm_practice_notes">实战笔记</option>
+      </select>
+      <input id="filter-date" type="date" class="text-sm border rounded px-2 py-1" onchange="loadContents()" />
+    </div>
+    <div id="content-list" class="space-y-3"></div>
+  </div>
+
+  <!-- Archive -->
+  <div id="tab-archive" class="slide-in hidden">
+    <div class="flex gap-6">
+      <div class="w-48">
+        <h3 class="font-semibold text-gray-900 mb-3">📅 日期</h3>
+        <div id="date-list" class="space-y-1 text-sm"></div>
+      </div>
+      <div class="flex-1">
+        <div id="archive-contents" class="space-y-3"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Content Preview Modal -->
+<div id="preview-modal" class="modal-overlay hidden" onclick="if(event.target===this)closePreview()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="flex items-center justify-between mb-4">
+      <h2 id="preview-title" class="text-xl font-bold text-gray-900"></h2>
+      <button class="text-gray-400 hover:text-gray-600 text-xl" onclick="closePreview()">✕</button>
+    </div>
+    <div class="flex gap-2 mb-4 border-b" id="platform-tabs"></div>
+    <div id="preview-body" class="prose text-sm max-h-[50vh] overflow-y-auto"></div>
+    <div class="flex gap-2 mt-4 pt-4 border-t">
+      <button class="btn-secondary text-sm" onclick="copyContent()">📋 复制</button>
+      <button class="btn-primary text-sm" id="btn-save-edit" style="display:none" onclick="saveEdit()">💾 保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+//  State
+// ══════════════════════════════════════════════
+const COLUMNS = [
+  {key:'ai_product_radar', label:'AI产品经理岗位雷达'},
+  {key:'ai_product_signal', label:'本周AI产品信号'},
+  {key:'pm_toolbox', label:'PM AI 提效工具箱'},
+  {key:'ai_product_deepdive', label:'AI产品深度拆解'},
+  {key:'pm_practice_notes', label:'产品实战笔记'},
+];
+let currentTab = 'dashboard';
+let currentRunId = null;
+let currentContentId = null;
+let currentPlatformTab = 'main';
+let sseSource = null;
+
+// ══════════════════════════════════════════════
+//  Tab Switching
+// ══════════════════════════════════════════════
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('[data-tab]').forEach(b => {
+    b.className = (b.dataset.tab === tab ? 'tab-active' : 'tab-inactive') + ' py-3 text-sm font-medium';
+  });
+  ['dashboard','pipeline','content','archive'].forEach(t => {
+    document.getElementById('tab-'+t).classList.toggle('hidden', t !== tab);
+  });
+  if (tab === 'dashboard') refreshDashboard();
+  if (tab === 'content') loadContents();
+  if (tab === 'archive') loadArchive();
+  if (tab === 'pipeline') { initPipelineTab(); loadRunHistory(); }
+}
+
+// ══════════════════════════════════════════════
+//  Dashboard
+// ══════════════════════════════════════════════
+async function refreshDashboard() {
+  try {
+    const r = await fetch('/api/stats');
+    const d = await r.json();
+    document.getElementById('stat-runs').textContent = d.total_runs || 0;
+    document.getElementById('stat-contents').textContent = d.total_contents || 0;
+    document.getElementById('stat-date').textContent = d.latest_date || '-';
+    const s = d.latest_status;
+    const sel = document.getElementById('stat-status');
+    if (s) {
+      sel.textContent = s.status === 'completed' ? '✅ 成功' : s.status === 'running' ? '⏳ 运行中' : '❌ 失败';
+      sel.className = 'text-2xl font-bold ' + (s.status === 'completed' ? 'text-green-600' : s.status === 'running' ? 'text-blue-600' : 'text-red-600');
+    } else {
+      sel.textContent = '-';
+    }
+    // Sources
+    const srcList = document.getElementById('source-list');
+    srcList.innerHTML = (d.sources || []).map(s => {
+      let badge = s.status === 'ok' ? 'badge-ok' : s.status === 'empty' ? 'badge-empty' : 'badge-err';
+      return `<div class="flex items-center justify-between py-1">
+        <span>${s.source}</span>
+        <span class="${badge}">${s.status === 'ok' ? s.item_count+'条' : s.status}</span>
+      </div>`;
+    }).join('');
+    // Latest content
+    const cont = await fetch('/api/contents?limit=5');
+    const cd = await cont.json();
+    document.getElementById('latest-content').innerHTML = cd.length ? cd.map(c => 
+      `<div class="flex items-center justify-between py-2 border-b border-gray-100 cursor-pointer hover:bg-gray-50 px-2 -mx-2 rounded" onclick="openPreview(${c.id})">
+        <span class="text-gray-700">${c.title || c.column_key}</span>
+        <span class="text-xs text-gray-400">${c.date} · ${COLUMNS.find(x=>x.key===c.column_key)?.label || c.column_key}</span>
+      </div>`
+    ).join('') : '<div class="text-gray-400">暂无内容，运行一次流水线吧 🚀</div>';
+  } catch(e) { console.error(e); }
+}
+
+async function testSource(source) {
+  const btn = event.target.closest('.card');
+  btn.style.opacity = '0.6';
+  try {
+    const r = await fetch('/api/sources/test/' + source, {method:'POST'});
+    const d = await r.json();
+    alert(`${source}: ${d.status === 'ok' ? '✅ '+d.count+'条' : '❌ '+d.msg}`);
+  } catch(e) { alert('测试失败'); }
+  btn.style.opacity = '1';
+  refreshDashboard();
+}
+
+// ══════════════════════════════════════════════
+//  Pipeline
+// ══════════════════════════════════════════════
+function initPipelineTab() {
+  const container = document.getElementById('column-checks');
+  container.innerHTML = COLUMNS.map(c =>
+    `<label class="flex items-center gap-1 text-sm bg-gray-50 px-3 py-1.5 rounded-full cursor-pointer hover:bg-gray-100">
+      <input type="checkbox" value="${c.key}" checked> ${c.label}
+    </label>`
+  ).join('');
+}
+
+async function loadRunHistory() {
+  try {
+    const r = await fetch('/api/pipeline/runs?limit=10');
+    const runs = await r.json();
+    document.getElementById('run-history').innerHTML = runs.map(rn => {
+      let icon = rn.status === 'completed' ? '✅' : rn.status === 'running' ? '⏳' : '❌';
+      return `<div class="flex items-center justify-between py-1.5 border-b border-gray-100 text-xs">
+        <span>${icon} #${rn.id}</span>
+        <span class="text-gray-400">${rn.started_at?.slice(0,16) || ''}</span>
+      </div>`;
+    }).join('');
+  } catch(e) {}
+}
+
+function startPipeline() {
+  const checks = document.querySelectorAll('#column-checks input:checked');
+  const columns = Array.from(checks).map(c => c.value);
+  if (!columns.length) { alert('请至少选择一个栏目'); return; }
+  
+  const skipScrape = document.getElementById('opt-skip-scrape').checked;
+  const images = document.getElementById('opt-images').checked;
+  const btn = document.getElementById('btn-run');
+  const status = document.getElementById('run-status');
+  const log = document.getElementById('log-container');
+  
+  btn.disabled = true;
+  status.textContent = '启动中...';
+  log.innerHTML = '';
+  
+  // Close existing SSE
+  if (sseSource) { sseSource.close(); sseSource = null; }
+  
+  fetch('/api/pipeline/run', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({columns, skip_scrape: skipScrape, generate_images: images})
+  }).then(r => r.json()).then(d => {
+    currentRunId = d.run_id;
+    status.textContent = `运行 #${d.run_id}`;
+    // Connect SSE
+    sseSource = new EventSource('/api/pipeline/stream/' + d.run_id);
+    sseSource.onmessage = (e) => {
+      const msg = JSON.parse(e.data);
+      if (msg.msg) {
+        log.innerHTML += `<div class="log-line">${msg.msg}</div>`;
+        log.scrollTop = log.scrollHeight;
+        status.textContent = msg.msg;
+      }
+      if (msg.step === 'done' || msg.step === 'error') {
+        btn.disabled = false;
+        sseSource.close();
+        sseSource = null;
+        loadRunHistory();
+        updateNavStatus(msg.step === 'done');
+        if (msg.step === 'done') status.textContent = '✅ 完成！';
+      }
+    };
+    sseSource.onerror = () => {
+      btn.disabled = false;
+      if (sseSource) { sseSource.close(); sseSource = null; }
+    };
+  }).catch(e => {
+    btn.disabled = false;
+    status.textContent = '❌ 请求失败';
+    log.innerHTML += `<div class="log-line text-red-400">错误: ${e}</div>`;
+  });
+}
+
+function updateNavStatus(ok) {
+  const dot = document.getElementById('status-dot');
+  const txt = document.getElementById('status-text');
+  if (ok) {
+    dot.className = 'w-2 h-2 rounded-full bg-green-500 inline-block';
+    txt.textContent = '就绪';
+  } else {
+    dot.className = 'w-2 h-2 rounded-full bg-red-500 inline-block';
+    txt.textContent = '错误';
+  }
+}
+
+// ══════════════════════════════════════════════
+//  Content
+// ══════════════════════════════════════════════
+async function loadContents() {
+  const col = document.getElementById('filter-column').value;
+  const date = document.getElementById('filter-date').value;
+  let url = '/api/contents?limit=50';
+  if (col) url += '&column=' + col;
+  if (date) url += '&date=' + date;
+  
+  try {
+    const r = await fetch(url);
+    const items = await r.json();
+    document.getElementById('content-list').innerHTML = items.map(c => {
+      const colLabel = COLUMNS.find(x=>x.key===c.column_key)?.label || c.column_key;
+      const pv = c.platform_versions || {};
+      const platforms = Object.keys(pv).filter(k => pv[k]);
+      return `<div class="card p-4 flex items-start justify-between group hover:shadow-md transition-shadow">
+        <div class="flex-1 cursor-pointer" onclick="openPreview(${c.id})">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-xs bg-brand-100 text-brand-700 px-2 py-0.5 rounded-full">${colLabel}</span>
+            <span class="text-xs text-gray-400">${c.date}</span>
+            ${c.is_published ? '<span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">已发布</span>' : ''}
+          </div>
+          <div class="font-medium text-gray-900">${c.title || '(无标题)'}</div>
+          <div class="text-xs text-gray-400 mt-1">${c.word_count || 0} 字 · ${platforms.length} 平台版本</div>
+        </div>
+        <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button class="text-xs text-gray-400 hover:text-brand-600" onclick="openPreview(${c.id})">👁 预览</button>
+          <button class="text-xs text-gray-400 hover:text-red-600" onclick="deleteContent(${c.id})">🗑</button>
+        </div>
+      </div>`;
+    }).join('') || '<div class="text-gray-400 text-center py-8">暂无内容</div>';
+  } catch(e) { console.error(e); }
+}
+
+async function deleteContent(id) {
+  if (!confirm('确认删除？')) return;
+  await fetch('/api/contents/' + id, {method:'DELETE'});
+  loadContents();
+}
+
+// ══════════════════════════════════════════════
+//  Preview Modal
+// ══════════════════════════════════════════════
+async function openPreview(id) {
+  currentContentId = id;
+  try {
+    const r = await fetch('/api/contents/' + id);
+    const c = await r.json();
+    document.getElementById('preview-title').textContent = c.title || c.column_key;
+    
+    // Platform tabs
+    const pv = c.platform_versions || {};
+    const platformNames = {main:'📄 原文', wechat:'📱 公众号', jike:'🟡 即刻', xiaohongshu:'📕 小红书', zhihu:'📚 知乎', maimai:'💼 脉脉', wechat_group:'💬 微信群'};
+    const tabs = ['main', ...Object.keys(pv).filter(k => pv[k])];
+    document.getElementById('platform-tabs').innerHTML = tabs.map(t =>
+      `<button class="platform-tab" data-platform="${t}" onclick="switchPlatform('${t}')">${platformNames[t] || t}</button>`
+    ).join('');
+    
+    currentPlatformTab = 'main';
+    switchPlatform('main', c);
+    
+    document.getElementById('preview-modal').classList.remove('hidden');
+    document.getElementById('btn-save-edit').style.display = 'none';
+  } catch(e) { console.error(e); }
+}
+
+function switchPlatform(platform, data) {
+  currentPlatformTab = platform;
+  document.querySelectorAll('.platform-tab').forEach(b => b.classList.toggle('active', b.dataset.platform === platform));
+  
+  const body = document.getElementById('preview-body');
+  if (platform === 'main') {
+    if (data) {
+      body.innerHTML = renderMarkdown(data.content || '');
+      // Enable editing
+      body.innerHTML = `<div class="flex justify-end mb-2"><button class="text-xs text-brand-600" onclick="enableEdit()">✏️ 编辑</button></div>
+        <div id="content-render">${body.innerHTML}</div>`;
+    }
+  } else {
+    // Platform version - show as text
+    const versions = data?.platform_versions || {};
+    body.innerHTML = `<pre class="text-sm whitespace-pre-wrap font-sans bg-gray-50 p-4 rounded-lg">${escapeHtml(versions[platform] || '')}</pre>`;
+  }
+}
+
+function enableEdit() {
+  const render = document.getElementById('content-render');
+  document.getElementById('preview-body').innerHTML = 
+    `<textarea class="content-editor" id="edit-textarea">${render.innerText}</textarea>`;
+  document.getElementById('btn-save-edit').style.display = 'inline-block';
+}
+
+async function saveEdit() {
+  const content = document.getElementById('edit-textarea').value;
+  await fetch('/api/contents/' + currentContentId, {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({content})
+  });
+  document.getElementById('btn-save-edit').style.display = 'none';
+  alert('已保存');
+  closePreview();
+  loadContents();
+}
+
+function copyContent() {
+  const body = document.getElementById('preview-body');
+  navigator.clipboard.writeText(body.innerText).then(() => {
+    alert('已复制到剪贴板');
+  });
+}
+
+function closePreview() {
+  document.getElementById('preview-modal').classList.add('hidden');
+}
+
+// ══════════════════════════════════════════════
+//  Archive
+// ══════════════════════════════════════════════
+async function loadArchive() {
+  try {
+    const r = await fetch('/api/archive/dates');
+    const dates = await r.json();
+    document.getElementById('date-list').innerHTML = dates.map(d =>
+      `<div class="cursor-pointer hover:text-brand-600 py-1 ${d === dates[0] ? 'font-semibold text-brand-600' : 'text-gray-600'}" onclick="loadArchiveDate('${d}')">📅 ${d}</div>`
+    ).join('');
+    if (dates.length) loadArchiveDate(dates[0]);
+  } catch(e) {}
+}
+
+async function loadArchiveDate(date) {
+  document.querySelectorAll('#date-list div').forEach(d => {
+    d.classList.toggle('font-semibold', d.textContent.includes(date));
+    d.classList.toggle('text-brand-600', d.textContent.includes(date));
+  });
+  try {
+    const r = await fetch('/api/archive/' + date);
+    const items = await r.json();
+    document.getElementById('archive-contents').innerHTML = items.map(c => {
+      const colLabel = COLUMNS.find(x=>x.key===c.column_key)?.label || c.column_key;
+      return `<div class="card p-4 cursor-pointer hover:shadow-md" onclick="openPreview(${c.id})">
+        <span class="text-xs bg-brand-100 text-brand-700 px-2 py-0.5 rounded-full">${colLabel}</span>
+        <div class="font-medium text-gray-900 mt-2">${c.title || '(无标题)'}</div>
+        <div class="text-xs text-gray-400 mt-1">${c.word_count || 0} 字</div>
+      </div>`;
+    }).join('') || '<div class="text-gray-400">该日期无内容</div>';
+  } catch(e) {}
+}
+
+// ══════════════════════════════════════════════
+//  Helpers
+// ══════════════════════════════════════════════
+function renderMarkdown(md) {
+  if (!md) return '';
+  // Simple markdown → HTML
+  let html = md
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/\n/g, '<br>');
+  return '<p>' + html + '</p>';
+}
+
+function escapeHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ══════════════════════════════════════════════
+//  Init
+// ══════════════════════════════════════════════
+refreshDashboard();
+
+// Keyboard shortcut: close modal
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closePreview();
+});
+</script>
+</body>
+</html>

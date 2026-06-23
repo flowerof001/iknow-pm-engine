@@ -1,0 +1,150 @@
+{
+  "models": {
+    "text": {
+      "meta/llama4-scout-109b": {
+        "name": "Llama 4 Scout 109B MoE",
+        "vendor": "Meta",
+        "params": "109B (MoE)",
+        "best_for": [
+          "英文文章",
+          "长文本",
+          "代码"
+        ],
+        "api_type": "openai_compatible",
+        "base_url": "https://api.together.xyz/v1",
+        "model_id": "meta-llama/Llama-4-Scout-109B",
+        "context_window": 8192,
+        "cost_per_1k_tokens": "$0.0002",
+        "api_key_env": "TOGETHER_API_KEY"
+      },
+      "zhipu/glm-5.2-753b": {
+        "name": "GLM-5.2 753B MoE",
+        "vendor": "智谱AI",
+        "params": "753B (MoE)",
+        "best_for": [
+          "中文文章",
+          "深度分析",
+          "报告"
+        ],
+        "api_type": "openai_compatible",
+        "base_url": "https://open.bigmodel.cn/api/paas/v4",
+        "model_id": "glm-5.2",
+        "context_window": 128000,
+        "cost_per_1k_tokens": "¥0.001",
+        "api_key_env": "ZHIPU_API_KEY"
+      },
+      "deepseek/deepseek-chat": {
+        "name": "DeepSeek V3",
+        "vendor": "DeepSeek",
+        "params": "671B (MoE)",
+        "best_for": [
+          "中英文通用",
+          "高性价比"
+        ],
+        "api_type": "openai_compatible",
+        "base_url": "https://api.deepseek.com/v1",
+        "model_id": "deepseek-chat",
+        "context_window": 65536,
+        "cost_per_1k_tokens": "¥0.001",
+        "api_key_env": "LLM_API_KEY"
+      },
+      "openai/gpt-4o": {
+        "name": "GPT-4o",
+        "vendor": "OpenAI",
+        "params": "-",
+        "best_for": [
+          "多模态",
+          "复杂推理"
+        ],
+        "api_type": "openai_compatible",
+        "base_url": "https://api.openai.com/v1",
+        "model_id": "gpt-4o",
+        "context_window": 128000,
+        "cost_per_1k_tokens": "$0.005",
+        "api_key_env": "LLM_API_KEY"
+      },
+      "ollama/qwen2.5:7b": {
+        "name": "Qwen 2.5 7B (本地)",
+        "vendor": "阿里通义",
+        "params": "7B",
+        "best_for": [
+          "本地免费",
+          "开发测试"
+        ],
+        "api_type": "openai_compatible",
+        "base_url": "http://localhost:11434/v1",
+        "model_id": "qwen2.5:7b",
+        "context_window": 32768,
+        "cost_per_1k_tokens": "免费",
+        "api_key_env": "LLM_API_KEY"
+      },
+      "deepseek/deepseek-v4-pro": {
+        "name": "DeepSeek-V4 Pro",
+        "vendor": "DeepSeek",
+        "params": "-",
+        "best_for": [
+          "中文文章",
+          "深度推理",
+          "长文本"
+        ],
+        "api_type": "openai_compatible",
+        "base_url": "https://api.deepseek.com/v1",
+        "model_id": "deepseek-chat",
+        "context_window": 131072,
+        "cost_per_1k_tokens": "¥0.001",
+        "api_key_env": "LLM_API_KEY"
+      }
+    },
+    "image": {
+      "black-forest-labs/flux-dev": {
+        "name": "FLUX.1-dev",
+        "vendor": "Black Forest Labs",
+        "params": "12B",
+        "best_for": [
+          "英文真实场景",
+          "照片级画质"
+        ],
+        "api_type": "replicate",
+        "model_id": "black-forest-labs/flux-dev",
+        "default_width": 1920,
+        "default_height": 1080,
+        "cost_per_image": "$0.003",
+        "api_key_env": "REPLICATE_API_TOKEN"
+      },
+      "ideogram-ai/ideogram-v4": {
+        "name": "Ideogram 4.0",
+        "vendor": "Ideogram",
+        "params": "-",
+        "best_for": [
+          "英文海报",
+          "文字渲染",
+          "品牌设计"
+        ],
+        "api_type": "replicate",
+        "model_id": "ideogram-ai/ideogram-v4",
+        "default_width": 1920,
+        "default_height": 1080,
+        "cost_per_image": "$0.008",
+        "api_key_env": "REPLICATE_API_TOKEN"
+      },
+      "hidream-ai/hidream-o1-image-dev": {
+        "name": "HiDream-O1-Image-Dev",
+        "vendor": "HiDream",
+        "params": "-",
+        "best_for": [
+          "中文图片",
+          "中文海报",
+          "亚洲风格"
+        ],
+        "api_type": "replicate",
+        "model_id": "hidream-ai/hidream-o1-image-dev-2604",
+        "default_width": 1920,
+        "default_height": 1080,
+        "cost_per_image": "$0.005",
+        "api_key_env": "REPLICATE_API_TOKEN"
+      }
+    }
+  },
+  "_version": "1.0",
+  "_updated": "2026-06-23"
+}

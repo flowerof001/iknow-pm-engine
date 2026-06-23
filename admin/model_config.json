@@ -1,0 +1,33 @@
+{
+  "text_generation": {
+    "chinese_article": {
+      "label": "中文文章生成",
+      "model_key": "deepseek/deepseek-v4-pro",
+      "description": "用于生成中文资讯文章、深度分析、岗位报告"
+    },
+    "english_article": {
+      "label": "英文文章生成",
+      "model_key": "meta/llama4-scout-109b",
+      "description": "用于生成英文资讯、技术博客、出海内容"
+    }
+  },
+  "image_generation": {
+    "english_realistic": {
+      "label": "英文真实场景图片",
+      "model_key": "black-forest-labs/flux-dev",
+      "description": "用于文章配图、真实场景插画、照片级图片"
+    },
+    "english_poster": {
+      "label": "英文海报图片",
+      "model_key": "ideogram-ai/ideogram-v4",
+      "description": "用于活动海报、社交媒体封面、品牌视觉"
+    },
+    "chinese_image": {
+      "label": "中文图片生成",
+      "model_key": "hidream-ai/hidream-o1-image-dev",
+      "description": "用于中文海报、中文配图、亚洲风格视觉"
+    }
+  },
+  "_version": "1.0",
+  "_updated": "2026-06-23 21:09:48"
+}
