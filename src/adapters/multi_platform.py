@@ -2,6 +2,7 @@
 import re
 from typing import Optional
 from src.config import config
+from src.utils import retry, log
 
 ADAPT_SYSTEM = """你是一位资深社交媒体运营，擅长把同一篇长内容改写成不同平台的版本。
 你的核心原则：
@@ -63,24 +64,29 @@ class MultiPlatformAdapter:
                 raise RuntimeError("未安装 openai 包: pip3 install openai")
         return self._client
 
+    @retry(max_attempts=3, base_delay=2.0, backoff=2.0)
+    def _call_llm(self, prompt: str, max_tokens: int = 4000) -> str:
+        """调用 LLM 改写（带指数退避重试）"""
+        resp = self.client.chat.completions.create(
+            model=config.LLM_MODEL,
+            messages=[
+                {"role": "system", "content": ADAPT_SYSTEM},
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=max_tokens,
+            temperature=0.8,
+        )
+        return resp.choices[0].message.content or ""
+
     def adapt(self, article: str, max_tokens: int = 4000) -> Optional[dict[str, str]]:
         """输入一篇长文，返回 6 个平台版本"""
         prompt = ADAPT_PROMPT.format(article=article)
 
         try:
-            resp = self.client.chat.completions.create(
-                model=config.LLM_MODEL,
-                messages=[
-                    {"role": "system", "content": ADAPT_SYSTEM},
-                    {"role": "user", "content": prompt},
-                ],
-                max_tokens=max_tokens,
-                temperature=0.8,
-            )
-            raw = resp.choices[0].message.content or ""
+            raw = self._call_llm(prompt, max_tokens)
             return self._parse(raw)
         except Exception as e:
-            print(f"[Adapter] LLM 调用失败: {e}")
+            log.error("Adapter", f"LLM 调用最终失败: {e}")
             return None
 
     def _parse(self, raw: str) -> dict[str, str]:

@@ -22,7 +22,8 @@ from admin.data import (
     get_db, create_run, update_run, get_runs, get_run,
     save_content, get_contents, get_content, update_content,
     get_dates_with_content, get_stats, save_raw_data,
-    get_source_status, update_source_status
+    get_source_status, update_source_status,
+    get_scheduler_config, set_scheduler_config, record_scheduler_run
 )
 
 ADMIN_DIR = Path(__file__).parent
@@ -371,6 +372,65 @@ def api_pipeline_run_detail(run_id: int):
     return run
 
 
+
+# ═══════════════════════════════════════════════════
+#  定时任务 API
+# ═══════════════════════════════════════════════════
+
+@app.post("/api/pipeline/cron")
+def api_pipeline_cron():
+    """Cron endpoint - triggers pipeline with default settings"""
+    req = PipelineRunRequest()
+    run_id = create_run(req.columns)
+    pipeline_queues[run_id] = queue.Queue()
+
+    import threading
+    def _run():
+        try:
+            _publish_progress(run_id, "⏰ Scheduled trigger", "init", 0)
+            result = _execute_pipeline(run_id, req.columns, req.skip_scrape, req.generate_images)
+            update_run(run_id, "completed",
+                       output_dir=str(result.get("panel_path", "")),
+                       sources_summary={k: len(v) for k, v in result.get("raw", {}).items()})
+            _publish_progress(run_id, "✅ Scheduled done", "done", 100)
+            record_scheduler_run("completed")
+        except Exception as e:
+            import traceback
+            update_run(run_id, "failed", error=traceback.format_exc())
+            _publish_progress(run_id, f"❌ Scheduled failed: {e}", "error", 0)
+            record_scheduler_run(f"failed: {e}")
+        finally:
+            def _clean():
+                import time
+                time.sleep(5)
+                pipeline_queues.pop(run_id, None)
+            threading.Thread(target=_clean).start()
+
+    threading.Thread(target=_run, daemon=True).start()
+    record_scheduler_run("started")
+    return {"run_id": run_id, "status": "scheduled"}
+
+
+@app.get("/api/scheduler")
+def api_get_scheduler():
+    """Get scheduler configuration"""
+    return get_scheduler_config()
+
+
+class SchedulerUpdate(BaseModel):
+    enabled: Optional[bool] = None
+    time_utc: Optional[str] = None
+
+
+@app.put("/api/scheduler")
+def api_update_scheduler(body: SchedulerUpdate):
+    """Update scheduler configuration"""
+    if body.enabled is not None:
+        set_scheduler_config("enabled", "true" if body.enabled else "false")
+    if body.time_utc is not None:
+        set_scheduler_config("time_utc", body.time_utc)
+    return get_scheduler_config()
+
 # ═══════════════════════════════════════════════════
 #  内容管理 API
 # ═══════════════════════════════════════════════════
@@ -472,3 +532,45 @@ if __name__ == "__main__":
     print("  📡 http://localhost:8800")
     print("  📊 仪表盘  |  ⚙️ 流水线  |  📝 内容管理  |  📦 归档\n")
     uvicorn.run(app, host="0.0.0.0", port=8800, log_level="error")
+
+# ═══════════════════════════════════════════════════
+#  后台调度器
+# ═══════════════════════════════════════════════════
+
+_scheduler_task: Optional[asyncio.Task] = None
+
+
+async def _scheduler_loop():
+    """Background scheduler loop"""
+    while True:
+        try:
+            config = get_scheduler_config()
+            if config.get("enabled") == "true":
+                now = datetime.now()
+                scheduled_time = config.get("time_utc", "02:00")
+                hour, minute = map(int, scheduled_time.split(":"))
+                if now.hour == hour and now.minute == minute:
+                    last_run = config.get("last_run_at", "")
+                    today_str = now.strftime("%Y-%m-%d")
+                    if today_str not in last_run:
+                        print(f"⏰ Cron trigger at {now.isoformat()}")
+                        api_pipeline_cron()
+        except Exception as e:
+            print(f"⚠️ Scheduler error: {e}")
+        await asyncio.sleep(60)
+
+
+@app.on_event("startup")
+async def startup_scheduler():
+    global _scheduler_task
+    _scheduler_task = asyncio.create_task(_scheduler_loop())
+    print("⏰ Scheduler started")
+
+
+@app.on_event("shutdown")
+async def shutdown_scheduler():
+    global _scheduler_task
+    if _scheduler_task:
+        _scheduler_task.cancel()
+        print("⏰ Scheduler stopped")
+

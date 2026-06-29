@@ -135,6 +135,32 @@
       </div>
     </div>
     <div class="card p-5 mt-6">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="font-semibold text-gray-900">⏰ 定时任务</h3>
+        <span id="scheduler-badge" class="badge-empty">已关闭</span>
+      </div>
+      <div class="flex items-center gap-4">
+        <label class="relative inline-flex items-center cursor-pointer">
+          <input type="checkbox" id="scheduler-toggle" class="sr-only peer" onchange="toggleScheduler()">
+          <div class="w-10 h-5 bg-gray-300 rounded-full peer peer-checked:bg-brand-500 peer-focus:ring-2 peer-focus:ring-brand-300 after:content-[''] after:absolute after:top-0.5 after:start-[4px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+        </label>
+        <div class="text-sm text-gray-600">
+          <span>每日 </span>
+          <select id="scheduler-time" class="text-sm border rounded px-2 py-0.5" onchange="updateSchedulerTime()">
+            <option value="00:00">08:00 (北京)</option>
+            <option value="01:00">09:00 (北京)</option>
+            <option value="02:00" selected>10:00 (北京)</option>
+            <option value="03:00">11:00 (北京)</option>
+            <option value="06:00">14:00 (北京)</option>
+            <option value="10:00">18:00 (北京)</option>
+            <option value="12:00">20:00 (北京)</option>
+          </select>
+          <span> 自动运行</span>
+        </div>
+      </div>
+      <div id="scheduler-last-run" class="text-xs text-gray-400 mt-2"></div>
+    </div>
+    <div class="card p-5 mt-6">
       <h3 class="font-semibold text-gray-900 mb-3">📋 最新内容</h3>
       <div id="latest-content" class="text-sm text-gray-500">加载中...</div>
     </div>
@@ -278,6 +304,8 @@ async function refreshDashboard() {
         <span class="${badge}">${s.status === 'ok' ? s.item_count+'条' : s.status}</span>
       </div>`;
     }).join('');
+    // Scheduler
+    loadScheduler();
     // Latest content
     const cont = await fetch('/api/contents?limit=5');
     const cd = await cont.json();
@@ -510,6 +538,63 @@ function copyContent() {
 
 function closePreview() {
   document.getElementById('preview-modal').classList.add('hidden');
+}
+
+// ══════════════════════════════════════════════
+//  Scheduler
+// ══════════════════════════════════════════════
+async function loadScheduler() {
+  try {
+    const r = await fetch('/api/scheduler');
+    const cfg = await r.json();
+    const toggle = document.getElementById('scheduler-toggle');
+    const badge = document.getElementById('scheduler-badge');
+    const timeSel = document.getElementById('scheduler-time');
+    const lastRun = document.getElementById('scheduler-last-run');
+    
+    toggle.checked = cfg.enabled === 'true';
+    badge.textContent = cfg.enabled === 'true' ? '运行中' : '已关闭';
+    badge.className = cfg.enabled === 'true' ? 'badge-ok' : 'badge-empty';
+    
+    if (cfg.time_utc) {
+      timeSel.value = cfg.time_utc;
+    }
+    
+    if (cfg.last_run_at) {
+      const d = new Date(cfg.last_run_at + 'Z');
+      const local = d.toLocaleString('zh-CN', {timeZone:'Asia/Shanghai'});
+      const statusLabel = cfg.last_run_status === 'completed' ? '✅ 成功' : 
+                          cfg.last_run_status === 'started' ? '⏳ 运行中' :
+                          cfg.last_run_status ? '❌ ' + cfg.last_run_status : '';
+      lastRun.textContent = '上次触发: ' + local + ' ' + statusLabel;
+    } else {
+      lastRun.textContent = '尚未触发过';
+    }
+  } catch(e) { console.error('Scheduler load error:', e); }
+}
+
+async function toggleScheduler() {
+  const enabled = document.getElementById('scheduler-toggle').checked;
+  try {
+    await fetch('/api/scheduler', {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({enabled})
+    });
+    loadScheduler();
+  } catch(e) { alert('更新失败'); }
+}
+
+async function updateSchedulerTime() {
+  const timeUtc = document.getElementById('scheduler-time').value;
+  try {
+    await fetch('/api/scheduler', {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({time_utc: timeUtc})
+    });
+    loadScheduler();
+  } catch(e) { alert('更新时间失败'); }
 }
 
 // ══════════════════════════════════════════════

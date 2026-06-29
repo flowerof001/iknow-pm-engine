@@ -19,6 +19,7 @@ from src.generators.content_generator import ContentGenerator
 from src.adapters.multi_platform import MultiPlatformAdapter
 from src.images.cover_generator import CoverGenerator
 from src.images.flux_generator import FluxGenerator
+from src.utils import log
 
 
 class Pipeline:
@@ -43,50 +44,45 @@ class Pipeline:
     # ─── Step 1: 采集 ─────────────────────────────────
 
     def collect_all(self) -> dict:
-        """运行全部爬虫，返回分源原始数据"""
-        print("\n" + "="*60)
-        print("  📡 Step 1: 信息采集")
-        print("="*60)
+        """运行全部爬虫，返回分源原始数据（单个 scraper 失败不影响其他）"""
+        log.info("Pipeline", "Step 1: 信息采集")
 
         raw = {}
+        scrapers = [
+            ("github", "GitHub Trending", lambda: self.github.fetch(days_back=3)),
+            ("arxiv", "arXiv AI 论文", lambda: self.arxiv.fetch(max_results=20)),
+            ("news", "AI 行业新闻", lambda: self.news.fetch_all()),
+            ("hackernews", "Hacker News", lambda: self.hn.fetch(max_items=30)),
+            ("juejin", "掘金 AI 文章", lambda: self.juejin.fetch(limit=20)),
+            ("v2ex", "V2EX AI 热帖", lambda: self.v2ex.fetch_all()),
+        ]
 
-        print("  [1/6] GitHub Trending ...")
-        raw["github"] = self.github.fetch(days_back=3)
-
-        print("  [2/6] arXiv AI 论文 ...")
-        raw["arxiv"] = self.arxiv.fetch(max_results=20)
-
-        print("  [3/6] AI 行业新闻 ...")
-        raw["news"] = self.news.fetch_all()
-
-        print("  [4/6] Hacker News ...")
-        raw["hackernews"] = self.hn.fetch(max_items=30)
-
-        print("  [5/6] 掘金 AI 文章 ...")
-        raw["juejin"] = self.juejin.fetch(limit=20)
-
-        print("  [6/6] V2EX AI 热帖 ...")
-        raw["v2ex"] = self.v2ex.fetch_all()
+        for i, (key, label, fetch_fn) in enumerate(scrapers, 1):
+            try:
+                log.info("Pipeline", f"[{i}/{len(scrapers)}] {label} ...")
+                raw[key] = fetch_fn()
+            except Exception as e:
+                log.error("Pipeline", f"{label} 采集失败: {e}")
+                raw[key] = []
 
         # 统计
         for source, items in raw.items():
-            print(f"        {source}: {len(items)} 条")
+            status = f"{len(items)} 条" if items else "空"
+            log.info("Pipeline", f"  {source}: {status}")
 
         # 保存原始数据
         raw_path = self.today_dir / "raw_data.json"
         with open(raw_path, "w", encoding="utf-8") as f:
             json.dump(raw, f, ensure_ascii=False, indent=2, default=str)
 
-        print(f"\n  💾 原始数据已保存: {raw_path}")
+        log.info("Pipeline", f"原始数据已保存: {raw_path}")
         return raw
 
     # ─── Step 2: 路由数据到各栏目 ──────────────────────
 
     def route_data(self, raw: dict) -> dict[str, list]:
         """将原始数据按栏目需求分配"""
-        print("\n" + "="*60)
-        print("  🔀 Step 2: 数据路由")
-        print("="*60)
+        log.info("Pipeline", "Step 2: 数据路由")
 
         github = raw.get("github", [])
         arxiv = raw.get("arxiv", [])
@@ -112,50 +108,49 @@ class Pipeline:
         }
 
         for col, items in routed.items():
-            print(f"        {col}: {len(items)} 条数据")
+            log.info("Pipeline", f"  {col}: {len(items)} 条数据")
 
         return routed
 
     # ─── Step 3: AI 生成 ───────────────────────────────
 
     def generate_content(self, routed: dict, columns: list[str]) -> dict:
-        """调用 LLM 生成指定栏目内容"""
-        print("\n" + "="*60)
-        print("  🤖 Step 3: AI 内容生成")
-        print("="*60)
+        """调用 LLM 生成指定栏目内容（单栏目失败不影响其他）"""
+        log.info("Pipeline", "Step 3: AI 内容生成")
 
         results = {}
         for col in columns:
             data = routed.get(col, [])
             if not data:
-                print(f"        ⏭  {col}: 无数据，跳过")
+                log.warn("Pipeline", f"  {col}: 无数据，跳过")
                 results[col] = None
                 continue
 
-            print(f"        ✍️  生成 {col} ...")
-            content = self.generator.generate(col, data)
-            results[col] = content
+            try:
+                log.info("Pipeline", f"  ✍️  生成 {col} ...")
+                content = self.generator.generate(col, data)
+                results[col] = content
 
-            if content:
-                # 保存单篇
-                filename = config.OUTPUT_FILES.get(col, f"{col}_{{date}}.md")
-                filename = filename.format(date=datetime.now().strftime("%Y%m%d"))
-                filepath = self.today_dir / filename
-                with open(filepath, "w", encoding="utf-8") as f:
-                    f.write(content)
-                print(f"        ✅ {col}: {len(content)} 字 → {filename}")
-            else:
-                print(f"        ❌ {col}: 生成失败")
+                if content:
+                    filename = config.OUTPUT_FILES.get(col, f"{col}_{{date}}.md")
+                    filename = filename.format(date=datetime.now().strftime("%Y%m%d"))
+                    filepath = self.today_dir / filename
+                    with open(filepath, "w", encoding="utf-8") as f:
+                        f.write(content)
+                    log.info("Pipeline", f"  ✅ {col}: {len(content)} 字 → {filename}")
+                else:
+                    log.warn("Pipeline", f"  ❌ {col}: 生成返回空")
+            except Exception as e:
+                log.error("Pipeline", f"  ❌ {col}: 生成异常 - {e}")
+                results[col] = None
 
         return results
 
     # ─── Step 4: 多平台改写 ────────────────────────────
 
     def adapt_content(self, generated: dict) -> dict:
-        """将生成的文章改写为多平台版本"""
-        print("\n" + "="*60)
-        print("  🔄 Step 4: 多平台改写")
-        print("="*60)
+        """将生成的文章改写为多平台版本（单篇失败不影响其他）"""
+        log.info("Pipeline", "Step 4: 多平台改写")
 
         all_versions = {}
 
@@ -163,19 +158,21 @@ class Pipeline:
             if not article:
                 continue
 
-            print(f"        📝 {col} → 6 平台 ...")
-            versions = self.adapter.adapt_to_text(article)
+            try:
+                log.info("Pipeline", f"  📝 {col} → 6 平台 ...")
+                versions = self.adapter.adapt_to_text(article)
 
-            if versions:
-                all_versions[col] = versions
-                # 保存
-                filename = f"{datetime.now().strftime('%Y%m%d')}_{col}_多平台版.md"
-                filepath = self.today_dir / filename
-                with open(filepath, "w", encoding="utf-8") as f:
-                    f.write(versions)
-                print(f"        ✅ 已保存: {filename}")
-            else:
-                print(f"        ⚠️  {col}: 改写失败")
+                if versions:
+                    all_versions[col] = versions
+                    filename = f"{datetime.now().strftime('%Y%m%d')}_{col}_多平台版.md"
+                    filepath = self.today_dir / filename
+                    with open(filepath, "w", encoding="utf-8") as f:
+                        f.write(versions)
+                    log.info("Pipeline", f"  ✅ 已保存: {filename}")
+                else:
+                    log.warn("Pipeline", f"  ⚠️  {col}: 改写返回空")
+            except Exception as e:
+                log.error("Pipeline", f"  ⚠️  {col}: 改写异常 - {e}")
 
         return all_versions
 
@@ -183,9 +180,7 @@ class Pipeline:
 
     def generate_publish_panel(self, generated: dict, all_versions: dict):
         """生成一个汇总 Markdown — 每日看一眼就可以发布的操控面板"""
-        print("\n" + "="*60)
-        print("  📋 Step 5: 生成发布面板")
-        print("="*60)
+        log.info("Pipeline", "Step 5: 生成发布面板")
 
         lines = [
             f"# 📋 AI 职场竞争力引擎 — 每日发布面板",
@@ -265,9 +260,7 @@ class Pipeline:
 
     def generate_cover_image(self, generated: dict) -> Optional[dict]:
         """为主推文章生成 FLUX 16:9 配图"""
-        print("\n" + "="*60)
-        print("  🎨 Step 3.5: FLUX 封面图生成")
-        print("="*60)
+        log.info("Pipeline", "Step 3.5: FLUX 封面图生成")
 
         # 取第一篇文章（job_radar 优先）
         for col in ["job_radar", "weekly_learn", "job_compass"]:

@@ -5,6 +5,7 @@ from typing import Optional
 from src.config import config
 from src.model_resolver import resolver
 from src.generators.pm_prompts import PM_PROMPTS as PROMPTS
+from src.utils import retry, log
 
 
 class ContentGenerator:
@@ -89,6 +90,21 @@ class ContentGenerator:
 
         return result
 
+    @retry(max_attempts=3, base_delay=2.0, backoff=2.0)
+    def _call_llm(self, system_prompt: str, user_prompt: str,
+                  max_tokens: int = 3000) -> str:
+        """调用 LLM（带指数退避重试，最多 3 次）"""
+        resp = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            max_tokens=max_tokens,
+            temperature=0.7,
+        )
+        return resp.choices[0].message.content
+
     def generate(self, column: str, raw_data: list[dict],
                  max_tokens: int = 3000) -> Optional[str]:
         """
@@ -98,43 +114,38 @@ class ContentGenerator:
         """
         prompt_cfg = PROMPTS.get(column)
         if not prompt_cfg:
-            print(f"[Generator] 未知栏目: {column}")
+            log.warn("Generator", f"未知栏目: {column}")
             return None
 
         raw_text = self._build_raw_data_text(raw_data)
         if not raw_text.strip():
-            print(f"[Generator] 无可用数据，跳过 {column}")
+            log.warn("Generator", f"无可用数据，跳过 {column}")
             return None
 
         user_prompt = prompt_cfg["user"].format(raw_data=raw_text)
 
         try:
-            resp = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": prompt_cfg["system"]},
-                    {"role": "user", "content": user_prompt},
-                ],
-                max_tokens=max_tokens,
-                temperature=0.7,
-            )
-            return resp.choices[0].message.content
+            return self._call_llm(prompt_cfg["system"], user_prompt, max_tokens)
         except Exception as e:
-            print(f"[Generator] LLM 调用失败 ({column}): {e}")
+            log.error("Generator", f"LLM 调用最终失败 ({column}): {e}")
             return None
 
     def generate_batch(self, columns: list[str], raw_data: dict[str, list[dict]],
                        max_tokens: int = 3000) -> dict[str, Optional[str]]:
-        """批量生成多个栏目"""
+        """批量生成多个栏目（单栏目失败不影响其他）"""
         results = {}
         for col in columns:
             data = raw_data.get(col, [])
             if not data:
-                print(f"[Generator] {col} 无数据，跳过")
+                log.warn("Generator", f"{col} 无数据，跳过")
                 results[col] = None
                 continue
-            print(f"[Generator] 正在生成 {col} ...")
-            results[col] = self.generate(col, data, max_tokens)
+            log.info("Generator", f"正在生成 {col} ...")
+            try:
+                results[col] = self.generate(col, data, max_tokens)
+            except Exception as e:
+                log.error("Generator", f"{col} 生成异常: {e}")
+                results[col] = None
         return results
 
     # ── 便捷方法 ──

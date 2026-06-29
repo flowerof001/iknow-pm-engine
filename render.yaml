@@ -14,3 +14,14 @@ services:
         sync: false
       - key: PYTHON_VERSION
         value: "3.11"
+
+  - type: cron
+    name: iknow-daily-pipeline
+    runtime: python
+    plan: free
+    schedule: "0 10 * * *"
+    buildCommand: pip install -r requirements.txt
+    startCommand: curl -X POST https://iknow-pm-engine.onrender.com/api/pipeline/cron
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"

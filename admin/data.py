@@ -62,6 +62,16 @@ def _init_tables(db: sqlite3.Connection):
             status TEXT DEFAULT 'ok',
             error_msg TEXT
         );
+
+        CREATE TABLE IF NOT EXISTS scheduler_config (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
+
+        INSERT OR IGNORE INTO scheduler_config (key, value) VALUES ("enabled", "false");
+        INSERT OR IGNORE INTO scheduler_config (key, value) VALUES ("time_utc", "02:00");
+        INSERT OR IGNORE INTO scheduler_config (key, value) VALUES ("last_run_at", "");
+        INSERT OR IGNORE INTO scheduler_config (key, value) VALUES ("last_run_status", "");
     """)
     db.commit()
 
@@ -239,3 +249,28 @@ def update_source_status(source: str, status: str, error_msg: str = ""):
 
 
 print(f"✅ 数据库初始化完成: {DB_PATH}")
+
+
+# ─── 调度器配置 ─────────────────────────────────
+
+def get_scheduler_config() -> dict:
+    db = get_db()
+    rows = db.execute("SELECT key, value FROM scheduler_config").fetchall()
+    db.close()
+    return {row["key"]: row["value"] for row in rows}
+
+
+def set_scheduler_config(key: str, value: str) -> dict:
+    db = get_db()
+    db.execute("""
+        INSERT INTO scheduler_config (key, value) VALUES (?, ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    """, [key, value])
+    db.commit()
+    db.close()
+    return get_scheduler_config()
+
+
+def record_scheduler_run(status: str):
+    set_scheduler_config("last_run_at", datetime.now().isoformat())
+    set_scheduler_config("last_run_status", status)
