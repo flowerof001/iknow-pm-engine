@@ -91,7 +91,7 @@ uvicorn admin.server:app --host 0.0.0.0 --port $PORT
 - 输出目录: output/2026-06-24/
 
 ## 待办 / 可优化项
-1. **[高]** Render 需配置 LLM_API_KEY / LLM_BASE_URL / LLM_MODEL 环境变量才能生成
+1. ✅ Render 环境变量已配置（LLM_API_KEY / LLM_BASE_URL / LLM_MODEL），线上流水线已验证通过
 2. ✅ news_scraper 已重构：36kr/机器之心移除（JS 渲染不可抓），改用少数派 RSS + AI 关键词过滤
 3. ✅ 前端 Markdown 预览已升级为 marked.js + highlight.js，支持代码高亮
 4. **[低]** 添加定时任务 (cron) 自动每日运行流水线
@@ -108,3 +108,9 @@ uvicorn admin.server:app --host 0.0.0.0 --port $PORT
 - ✅ ContentGenerator 改用 PM_PROMPTS（修复生成失败）
 - ✅ 前端 4 Tab SPA 仪表盘完整可用
 - ✅ 5 篇 PM 内容成功生成（16,952 字）
+
+## 已完善 (2026-06-29)
+- ✅ Render 环境变量配置完成（DeepSeek API）
+- ✅ 线上流水线验证通过（7 路源 101 条数据 → pm_toolbox 3089 字 + 6 平台版本）
+- ✅ Render API 自动部署触发成功
+- ✅ 线上 Dashboard: https://iknow-pm-engine.onrender.com 正常运行
